@@ -1,0 +1,20 @@
+# pyrogram==2.0.106 was REMOVED on purpose — it conflicts with kurigram
+# below (a Pyrogram fork that installs under the SAME `pyrogram` import
+# name). Having both in this file made pip installs order-dependent:
+# whichever got installed last silently overwrote the other's files in
+# site-packages/pyrogram/, so some deploys ended up running the old
+# official pyrogram build with no Managed Bots (Bot API 9.6) support at
+# all — which is exactly why the Titanium "Auto-Create Bot" button would
+# sometimes just show "not available" for no obvious reason. Only
+# kurigram is needed; it's a drop-in pyrogram replacement.
+kurigram>=2.2.18
+tgcrypto==1.2.5
+telethon==1.34.0
+python-dotenv==1.0.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+aiohttp==3.9.5
+cryptography==42.0.8
+motor==3.7.1
+pymongo==4.9.2
+Flask==2.3.3
