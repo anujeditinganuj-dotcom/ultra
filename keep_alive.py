@@ -12,6 +12,7 @@ _PING_INTERVAL = 300
 _SERVER: HTTPServer | None = None
 _PING_THREAD: threading.Thread | None = None
 _LOCK = threading.Lock()
+_SERVER_READY = threading.Event()
 
 
 import urllib.parse
@@ -125,6 +126,9 @@ def _get_cached_public_ip() -> str | None:
 
 
 class _StreamingHandler(BaseHTTPRequestHandler):
+    # Health checks are tiny one-shot requests. HTTP/1.0 avoids leaving a
+    # keep-alive socket open when the client/proxy has already gone away.
+    protocol_version = "HTTP/1.0"
     """HTTP handler that:
       • GET /health, HEAD /health → 200 keep-alive (unchanged)
       • GET /stream/<code>        → reverse-proxy the registered CDN URL with
@@ -138,13 +142,21 @@ class _StreamingHandler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # suppress per-request noise in Render logs
 
+    def _safe_write(self, data: bytes):
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            # Client/proxy disconnected before the response finished.
+            return False
+        return True
+
     def _send_error_response(self, code: int, msg: str):
         body = msg.encode()
         self.send_response(code)
         self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        self._safe_write(body)
 
     def _handle_stream(self, is_head: bool):
         # Parse /stream/<code>
@@ -155,7 +167,7 @@ class _StreamingHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             if not is_head:
-                self.wfile.write(b"Anujkumar alive")
+                self._safe_write(b"Anujkumar alive")
             return
 
         code = parts[1]
@@ -227,8 +239,8 @@ class _StreamingHandler(BaseHTTPRequestHandler):
         # Stream bytes to client in 256 KB chunks
         try:
             for chunk in upstream.iter_content(chunk_size=256 * 1024):
-                if chunk:
-                    self.wfile.write(chunk)
+                if chunk and not self._safe_write(chunk):
+                    break
         except (BrokenPipeError, ConnectionResetError):
             pass  # client disconnected mid-stream — normal
         except Exception as e:
@@ -242,7 +254,7 @@ class _StreamingHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Anujkumar alive")
+            self._safe_write(b"Anujkumar alive")
 
     def do_HEAD(self):
         if self.path.strip("/").startswith("stream/"):
@@ -269,15 +281,33 @@ def _ping_loop():
     target = _ping_target()
     log.info("Keep-alive ping target: %s (every %ss)", target, _PING_INTERVAL)
 
+    # Wait until our health server has successfully bound its socket.
+    # This removes the startup race that can produce an initial HTTP 502.
+    _SERVER_READY.wait(timeout=30)
+
+    consecutive_failures = 0
     while True:
         try:
             req = Request(target, method="HEAD")
             with urlopen(req, timeout=20) as resp:
-                log.info("Keep-alive ping ok: %s", getattr(resp, "status", 200))
+                status = getattr(resp, "status", 200)
+                consecutive_failures = 0
+                log.debug("Keep-alive ping ok: %s", status)
         except URLError as exc:
-            log.warning("Keep-alive ping failed: %s", exc)
+            consecutive_failures += 1
+            # A temporary Render/proxy failure is not useful log noise.
+            if consecutive_failures >= 3:
+                log.warning(
+                    "Keep-alive ping failed (%s consecutive): %s",
+                    consecutive_failures, exc
+                )
         except Exception as exc:
-            log.warning("Keep-alive ping error: %s", exc)
+            consecutive_failures += 1
+            if consecutive_failures >= 3:
+                log.warning(
+                    "Keep-alive ping error (%s consecutive): %s",
+                    consecutive_failures, exc
+                )
 
         time.sleep(_PING_INTERVAL)
 
@@ -312,6 +342,9 @@ def Anujkumar_keep_alive(real_server_started: bool = False):
                     name="Anujkumar-health",
                 )
                 thread.start()
+                _SERVER_READY.set()
+        elif real_server_started:
+            _SERVER_READY.set()
 
         if _PING_THREAD is None or not _PING_THREAD.is_alive():
             _PING_THREAD = threading.Thread(
