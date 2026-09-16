@@ -13,5 +13,7 @@ services:
         sync: false
       - key: SESSION
         sync: false
+      - key: BOT_SESSION_STRING
+        sync: false
       - key: OWNER_ID
         sync: false
