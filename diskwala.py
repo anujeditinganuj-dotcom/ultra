@@ -62,7 +62,7 @@ def decrypt_file(file_data: dict) -> dict:
 def extract_diskwala_links(text: str) -> list[str]:
     """Extract Diskwala/Flezen URLs from text."""
     patterns = [
-        r"https?://(?:www\.)?diskwala\.com/(?:app|playlist)/[A-Za-z0-9]{24}","
+        r"https?://(?:www\.)?diskwala\.com/(?:app)/[A-Za-z0-9]{24}","
         # Flezen share links come as either flezen.com/<id> or
         # flezen.com/s/<id> (also seen: /share/, /f/, /v/, /d/), and the id
         # itself can contain underscores/hyphens (e.g. "daejre...w_kmczy") —
