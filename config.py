@@ -3,11 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_ID = int(os.environ["API_ID"])
-API_HASH = os.environ["API_HASH"]
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-SESSION = os.environ["SESSION"]
-OWNER_ID = int(os.environ["OWNER_ID"])
+API_ID = os.getenv("API_ID", "")
+API_HASH = os.getenv("API_HASH", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+SESSION = os.getenv("SESSION", "")
+OWNER_ID = os.getenv("OWNER_ID", "")
 
 # Optional: a pyrogram/kurigram session string for the BOT client (app),
 # exported once via app.export_session_string() and saved here so a fresh
@@ -36,7 +36,7 @@ PREMIUM_LINK_LIMIT = int(os.getenv("PREMIUM_LINK_LIMIT", "20"))
 
 # MongoDB connection. MONGO_URI is required (e.g. a MongoDB Atlas
 # connection string). MONGO_DB_NAME defaults to "diskwala_bot".
-MONGO_URI = os.environ["MONGO_URI"]
+MONGO_URI = os.getenv("MONGO_URI", "")
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "diskwala_bot")
 
 # ---------------------------------------------------------------------
